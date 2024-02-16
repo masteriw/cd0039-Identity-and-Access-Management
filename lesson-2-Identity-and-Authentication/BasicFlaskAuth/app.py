@@ -86,7 +86,6 @@ def verify_decode_jwt(token):
     jwks = json.loads(jsonurl.read())
     print('jwks' + str(jwks))
     unverified_header = jwt.get_unverified_header(token)
-    print('CHEGUEI')
     rsa_key = {}
     if 'kid' not in unverified_header:
         logging.debug('Kid not in unverified header')
@@ -141,31 +140,63 @@ def verify_decode_jwt(token):
                 'description': 'Unable to find the appropriate key.'
             }, 400)
 
-'''
-Esta é um decorador que é usado para garantir que uma rota específica 
-requer autenticação. Ela obtém o token de acesso, verifica e decodifica 
-o JWT, e então chama a função original com o payload do JWT como um 
-argumento adicional.
-'''
-def requires_auth(f):
-    @wraps(f)
-    def wrapper(*args, **kwargs):
-        token = get_token_auth_header()
-        try:
-            print('token antes de verify_decode_jwt: ' + token)
-            payload = verify_decode_jwt(token)
-        except Exception as e:
-            print('Exception: ' + str(e))
-            abort(401)
-        return f(payload, *args, **kwargs)
+# A função check_permissions verifica se uma permissão específica está presente no payload.
+def check_permissions(permission, payload):
+    # Verifica se a chave 'permissions' está presente no payload.
+    # Se não estiver, uma exceção AuthError é lançada com uma mensagem de erro específica.
+    if 'permissions' not in payload:
+        raise AuthError({
+            'code': 'invalid_claims',
+            'description': 'Permissions not included in JWT.'
+        }, 400)
 
-    return wrapper
+    # Verifica se a permissão específica está presente na lista de permissões do payload.
+    # Se não estiver, uma exceção AuthError é lançada com uma mensagem de erro específica.
+    if permission not in payload['permissions']:
+        raise AuthError({
+            'code': 'unauthorized',
+            'description': 'Permission not found.'
+        }, 403)
+    
+    # Se a permissão estiver presente, a função retorna True.
+    return True
 
-'''
-Esta é uma rota que requer autenticação. Ela usa o decorador requires_auth, 
-imprime o payload do JWT e retorna “Access Granted”.
-'''
+# A função 'requires_auth' é um decorador de função que verifica se um usuário tem as permissões necessárias.
+# Ela recebe como argumento uma string 'permissions' que representa as permissões necessárias.
+def requires_auth(permissions=''):
+    # A função 'requires_auth_decorator' é o decorador real que será aplicado à função 'f'.
+    def requires_auth_decorator(f):
+        # O decorador 'wraps' é usado para preservar a assinatura da função original 'f'.
+        @wraps(f)
+        def wrapper(*args, **kwargs):
+            # A função 'get_token_auth_header' é chamada para obter o token do cabeçalho de autorização.
+            token = get_token_auth_header()
+            try:
+                # O token é verificado e decodificado usando a função 'verify_decode_jwt'.
+                payload = verify_decode_jwt(token)
+            except Exception as e:
+                # Se ocorrer uma exceção durante a verificação e decodificação do token, 
+                # a exceção é impressa e um erro 401 é retornado.
+                print('Exception: ' + str(e))
+                abort(401)
+
+            # A função 'check_permissions' é chamada para verificar se as permissões no payload incluem a permissão necessária.
+            check_permissions(permissions, payload)
+            
+            # Se a verificação de permissões for bem-sucedida, a função original 'f' é chamada com o payload e quaisquer outros argumentos e retorna o resultado.
+            return f(payload, *args, **kwargs)
+        # O decorador retorna a função 'wrapper'.
+        return wrapper
+    # A função 'requires_auth' retorna o decorador 'requires_auth_decorator'.
+    return requires_auth_decorator
+
+# A rota '/headers' é definida usando o decorador @app.route.
 @app.route('/headers')
-@requires_auth
+# O decorador @requires_auth('get:appointments') é usado para indicar que a rota '/headers'
+# requer autenticação e a permissão 'get:appointments' para ser acessada.
+@requires_auth('get:appointments')
+# A função 'headers' é definida para lidar com as solicitações para a rota '/headers'.
 def headers(payload):
+    # Se a autenticação for bem-sucedida e a permissão 'get:appointments' for concedida,
+    # a função retorna a string 'Access Granted'.
     return 'Access Granted'
