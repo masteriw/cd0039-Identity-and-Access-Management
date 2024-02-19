@@ -64,8 +64,15 @@ class Drink(db.Model):
     '''
 
     def short(self):
-        print(json.loads(self.recipe))
-        short_recipe = [{'color': r['color'], 'parts': r['parts']} for r in json.loads(self.recipe)]
+        recipe = json.loads(self.recipe)
+        
+        # Verifica se a receita é uma lista
+        if isinstance(recipe, list):
+            short_recipe = [{'color': r['color'], 'parts': r['parts']} for r in recipe]
+        else:
+            # Se a receita não for uma lista, assuma que é uma string
+            short_recipe = recipe
+
         return {
             'id': self.id,
             'title': self.title,
