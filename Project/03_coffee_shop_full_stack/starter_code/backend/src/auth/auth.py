@@ -31,10 +31,9 @@ class AuthError(Exception):
     return the token part of the header
 '''
 '''
-Esta função é usada para obter o token de acesso do cabeçalho de 
-autorização da solicitação HTTP. Ela verifica se o cabeçalho de 
-autorização está presente e se o esquema de autorização é “Bearer”. 
-Em seguida, ela retorna o token de acesso.
+This function is used to get the access token from the authorization header of the HTTP request. 
+It checks if the authorization header is present and if the authorization scheme is "Bearer". 
+Then, it returns the access token.
 '''
 def get_token_auth_header():
     auth = request.headers.get('Authorization', None)
@@ -81,18 +80,18 @@ def get_token_auth_header():
     it should raise an AuthError if the requested permission string is not in the payload permissions array
     return true otherwise
 '''
-# A função check_permissions verifica se uma permissão específica está presente no payload.
+# The check_permissions function checks if a specific permission is present in the payload.
 def check_permissions(permission, payload):
-    # Verifica se a chave 'permissions' está presente no payload.
-    # Se não estiver, uma exceção AuthError é lançada com uma mensagem de erro específica.
+    # Checks if the 'permissions' key is present in the payload.
+    # If it's not, an AuthError exception is raised with a specific error message.
     if 'permissions' not in payload:
         raise AuthError({
             'code': 'invalid_claims',
             'description': 'Permissions not included in JWT.'
         }, 400)
 
-    # Verifica se a permissão específica está presente na lista de permissões do payload.
-    # Se não estiver, uma exceção AuthError é lançada com uma mensagem de erro específica.
+    # Checks if the specific permission is present in the payload's permissions list.
+    # If it's not, an AuthError exception is raised with a specific error message.
     if permission not in payload['permissions']:
         raise AuthError({
             'code': 'unauthorized',
@@ -113,17 +112,22 @@ def check_permissions(permission, payload):
     !!NOTE urlopen has a common certificate error described here: https://stackoverflow.com/questions/50236117/scraping-ssl-certificate-verify-failed-error-for-http-en-wikipedia-org
 '''
 '''
-Esta função é usada para verificar e decodificar o JWT. 
-Ela obtém as chaves públicas do seu domínio Auth0, verifica se o JWT 
-tem um “kid” no cabeçalho, e então usa a chave apropriada para 
-decodificar o JWT. Ela também verifica se o JWT não expirou e se as 
-reivindicações (claims) são corretas.
+This function is used to verify and decode the JWT (JSON Web Token). 
+It fetches the public keys from your Auth0 domain, checks if the JWT 
+has a "kid" in the header, and then uses the appropriate key to 
+decode the JWT. It also checks if the JWT has not expired and if the 
+claims are correct.
 '''
 def verify_decode_jwt(token):
+    # Fetch the JSON Web Key Set (JWKS) from the Auth0 domain
     jsonurl = urlopen(f'https://{AUTH0_DOMAIN}/.well-known/jwks.json')
     jwks = json.loads(jsonurl.read())
+
+    # Get the unverified header of the JWT
     unverified_header = jwt.get_unverified_header(token)
     rsa_key = {}
+
+    # Check if the 'kid' key is in the unverified header
     if 'kid' not in unverified_header:
         logging.debug('Key ID not in unverified header')
         raise AuthError({
@@ -131,8 +135,11 @@ def verify_decode_jwt(token):
             'description': 'Authorization malformed.'
         }, 401)
 
+    # Loop through the keys in the JWKS
     for key in jwks['keys']:
+        # If the 'kid' of the current key matches the 'kid' in the unverified header
         if key['kid'] == unverified_header['kid']:
+            # Build the RSA key
             rsa_key = {
                 'kty': key['kty'],
                 'kid': key['kid'],
@@ -140,8 +147,11 @@ def verify_decode_jwt(token):
                 'n': key['n'],
                 'e': key['e']
             }
+
+    # If the RSA key was found
     if rsa_key:
         try:
+            # Decode the JWT using the RSA key
             payload = jwt.decode(
                 token,
                 rsa_key,
@@ -150,6 +160,7 @@ def verify_decode_jwt(token):
                 issuer='https://' + AUTH0_DOMAIN + '/'
             )
 
+            # Return the payload of the JWT
             return payload
 
         except jwt.ExpiredSignatureError:
@@ -187,31 +198,31 @@ def verify_decode_jwt(token):
     it should use the check_permissions method validate claims and check the requested permission
     return the decorator which passes the decoded payload to the decorated method
 '''
-# A função 'requires_auth' é um decorador de função que verifica se um usuário tem as permissões necessárias.
-# Ela recebe como argumento uma string 'permissions' que representa as permissões necessárias.
+# The 'requires_auth' function is a function decorator that checks if a user has the necessary permissions.
+# It takes as an argument a string 'permissions' that represents the necessary permissions.
 def requires_auth(permissions=''):
-    # A função 'requires_auth_decorator' é o decorador real que será aplicado à função 'f'.
+    # The 'requires_auth_decorator' function is the actual decorator that will be applied to the function 'f'.
     def requires_auth_decorator(f):
-        # O decorador 'wraps' é usado para preservar a assinatura da função original 'f'.
+        # The 'wraps' decorator is used to preserve the signature of the original function 'f'.
         @wraps(f)
         def wrapper(*args, **kwargs):
-            # A função 'get_token_auth_header' é chamada para obter o token do cabeçalho de autorização.
+            # The 'get_token_auth_header' function is called to get the token from the authorization header.
             token = get_token_auth_header()
             try:
-                # O token é verificado e decodificado usando a função 'verify_decode_jwt'.
+                # The token is verified and decoded using the 'verify_decode_jwt' function.
                 payload = verify_decode_jwt(token)
             except Exception as e:
-                # Se ocorrer uma exceção durante a verificação e decodificação do token, 
-                # a exceção é impressa e um erro 401 é retornado.
+                # If an exception occurs during the verification and decoding of the token, 
+                # the exception is printed and a 401 error is returned.
                 pprint.pprint('Exception: ' + str(e))
                 abort(401)
 
-            # A função 'check_permissions' é chamada para verificar se as permissões no payload incluem a permissão necessária.
+            # The 'check_permissions' function is called to check if the permissions in the payload include the necessary permission.
             check_permissions(permissions, payload)
             
-            # Se a verificação de permissões for bem-sucedida, a função original 'f' é chamada com o payload e quaisquer outros argumentos e retorna o resultado.
+            # If the permission check is successful, the original function 'f' is called with the payload and any other arguments and returns the result.
             return f(payload, *args, **kwargs)
-        # O decorador retorna a função 'wrapper'.
+        # The decorator returns the 'wrapper' function.
         return wrapper
-    # A função 'requires_auth' retorna o decorador 'requires_auth_decoraor'.
+    # The 'requires_auth' function returns the 'requires_auth_decorator' decorator.
     return requires_auth_decorator
