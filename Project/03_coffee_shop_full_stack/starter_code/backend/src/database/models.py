@@ -69,8 +69,8 @@ class Drink(db.Model):
         # Verifica se a receita é uma lista
         if isinstance(recipe, list):
             short_recipe = [{'color': r['color'], 'parts': r['parts']} for r in recipe]
+        # Se a receita não for uma lista, assuma que é uma string
         else:
-            # Se a receita não for uma lista, assuma que é uma string
             short_recipe = recipe
 
         return {
